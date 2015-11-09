@@ -59,7 +59,6 @@ module.exports = [{
   action: function( chat, stanza ) {
     let match = requestSongRegex.exec( stanza.message );
     let youtubeID = stanza.message.replace(/!request https:\/\/www.youtube.com\/watch\?v=/, '');
-    console.log(youtubeID);
 
     // Look up the song information
     let youtube = getYoutubeClient( chat );
