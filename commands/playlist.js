@@ -117,6 +117,76 @@ module.exports = [{
 
   }
 }, {
+  // Shows the playlist
+  name: '!playlist',
+  help: 'Skip the song if moderator, else place a vote to skip the song.',
+  types: ['message'],
+  regex: /^(!|\/)playlist$/,
+  action: function( chat, stanza ) {
+    let player = getPlayer( chat );
+    let playlist = getPlaylist( chat );
+
+    let tracks = [];
+    let trackIndex = 1;
+
+    for(let track of playlist) {
+      tracks.push(trackIndex++ + ': ' + track.title)
+    }
+
+    const maxTracksPerMessage = 21;
+
+    let chunks = 1;
+    let chunker = (tracks) => {
+      if(tracks.length > maxTracksPerMessage) {
+        let start = 0;
+        let end = start == tracks.length ? tracks.length : maxTracksPerMessage;
+        chunks = Math.ceil(tracks.length / maxTracksPerMessage);
+        while(chunks > 0) {
+          let chunk = tracks.slice(start, end).join('\n');
+          chat.sendMessage( chunk );
+          start+=maxTracksPerMessage;
+          end+=maxTracksPerMessage;
+          chunks--;
+        }
+      }
+      else {
+        let prettyPlaylist = tracks.join('\n');
+        chat.sendMessage( prettyPlaylist );
+      }
+    }
+
+    chunker(tracks);
+  }
+}, {
+  // Skip current song
+  name: '!skip',
+  help: 'Skip the song if moderator, else place a vote to skip the song.',
+  types: ['message'],
+  regex: /^(!|\/)skip\ [0-9]+$/,
+  action: function( chat, stanza ) {
+    let player = getPlayer( chat );
+    let playlist = getPlaylist( chat );
+
+    let trackIndex = stanza.message.replace(/\!skip\ /, '');
+    nextTrackIndex = trackIndex;
+    prevTrackIndex = trackIndex - 2;
+
+    player.currentSongIndex = trackIndex - 1;
+    setPlayer( player, chat );
+
+    let currentSong = playlist[ player.currentSongIndex ];
+
+    if ( player.playing && playlist.length > 0 ) {
+      // Player is playing a song
+      websocket.sendMessage( chat.credentials.room, {
+        message: 'skip',
+        youtubeID: currentSong.youtubeID
+      });
+    }
+
+    chat.sendMessage( `Current song: ${currentSong.title}`)
+  }
+}, {
   // Skip current song
   name: '!next',
   help: 'Skip the song if moderator, else place a vote to skip the song.',
@@ -124,7 +194,12 @@ module.exports = [{
   regex: /^(!|\/)next$/,
   action: function( chat, stanza ) {
     let player = getPlayer( chat );
+    let playlist = getPlaylist( chat );
+
     nextSong( chat );
+
+    let currentSong = playlist[ player.currentSongIndex ];
+    chat.sendMessage( `Current song: ${currentSong.title}`)
   }
 }, {
   // Skip current song
@@ -134,7 +209,12 @@ module.exports = [{
   regex: /^(!|\/)prev$/,
   action: function( chat, stanza ) {
     let player = getPlayer( chat );
+    let playlist = getPlaylist( chat );
+
     prevSong( chat );
+
+    let currentSong = playlist[ player.currentSongIndex ];
+    chat.sendMessage( `Current song: ${currentSong.title}`)
   }
 }, {
   // Pause current song
@@ -215,7 +295,6 @@ function nextSong( chat ) {
   nextTrackIndex = nextTrackIndex == playlist.length ? 0 : nextTrackIndex;
   let nextTrack = nextTrackIndex++;
   player.currentSongIndex = nextTrack;
-  player.skipVotes = [];
   setPlayer( player, chat );
 
   Log.log( `Next song, new index: ${player.currentSongIndex} out of ${playlist.length}`);
@@ -242,7 +321,6 @@ function prevSong( chat ) {
   prevTrackIndex = prevTrackIndex == 0 ? playlist.length - 1 : prevTrackIndex;
   let prevTrack = prevTrackIndex--;
   player.currentSongIndex = prevTrack;
-  player.skipVotes = [];
   setPlayer( player, chat );
 
   Log.log( `Prev song, new index: ${player.currentSongIndex} out of ${playlist.length}`);
